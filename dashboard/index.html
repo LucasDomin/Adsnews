@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AdSpy SaaS</title>
+  <style>
+    body {
+      background: #0f0f0f;
+      color: white;
+      font-family: Arial;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .card {
+      background: #1c1c1c;
+      padding: 15px;
+      border-radius: 10px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>?? AdSpy Dashboard</h1>
+
+<input id="search" placeholder="Buscar anúncios..." />
+
+<div class="grid" id="grid"></div>
+
+<script src="../app/main.js"></script>
+
+</body>
+</html>

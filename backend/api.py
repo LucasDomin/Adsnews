@@ -1,11 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
+import os
+
+from openai import OpenAI
+
 from database.db import SessionLocal
 from database.models import Ad
 
+# -----------------------
+# INIT OPENAI CLIENT
+# -----------------------
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 app = FastAPI(title="Ad Intelligence API")
 
-# CORS (ESSENCIAL pro frontend)
+# -----------------------
+# CORS
+# -----------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,29 +27,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = SessionLocal()
-
-
+# -----------------------
+# HEALTH CHECK
+# -----------------------
 @app.get("/")
-def root():
-    return {"status": "ok", "message": "Ad Intelligence API running"}
+def health():
+    return {
+        "status": "ok",
+        "message": "Ad Intelligence API running"
+    }
 
-
-# =========================
+# -----------------------
 # ADS
-# =========================
+# -----------------------
 @app.get("/ads")
-def get_ads(limit: int = 20, country: str = None, media_type: str = None):
-
-    query = db.query(Ad)
-
-    if country:
-        query = query.filter(Ad.page_name.contains(country))
-
-    if media_type:
-        query = query.filter(Ad.media_type == media_type)
-
-    ads = query.limit(limit).all()
+def get_ads(limit: int = 100):
+    db = SessionLocal()
+    ads = db.query(Ad).order_by(Ad.id.desc()).limit(limit).all()
 
     return [
         {
@@ -48,44 +55,103 @@ def get_ads(limit: int = 20, country: str = None, media_type: str = None):
             "cta_link": a.cta_link,
             "media_type": a.media_type,
             "image_url": a.image_url,
-            "ocr_text": a.ocr_text
+            "video_preview": a.video_preview,
+            "country": getattr(a, "country", None),
         }
         for a in ads
     ]
 
-
-@app.get("/ads/{ad_id}")
-def get_ad(ad_id: str):
-
-    ad = db.query(Ad).filter(Ad.ad_id == ad_id).first()
-
-    if not ad:
-        return {"error": "not found"}
-
-    return ad.__dict__
-
-
-# =========================
-# INSIGHTS (SEU DIFERENCIAL)
-# =========================
-@app.get("/insights/market")
-def market_insights():
-
+# -----------------------
+# INSIGHTS
+# -----------------------
+@app.get("/insights/summary")
+def insights():
+    db = SessionLocal()
     ads = db.query(Ad).all()
 
     media = {}
-    ctas = {}
     pages = {}
 
     for a in ads:
-
         media[a.media_type] = media.get(a.media_type, 0) + 1
-        ctas[a.cta] = ctas.get(a.cta, 0) + 1
         pages[a.page_name] = pages.get(a.page_name, 0) + 1
 
     return {
         "total_ads": len(ads),
         "media_distribution": media,
-        "top_ctas": sorted(ctas.items(), key=lambda x: x[1], reverse=True)[:10],
-        "top_pages": sorted(pages.items(), key=lambda x: x[1], reverse=True)[:10],
+        "top_pages": sorted(pages.items(), key=lambda x: x[1], reverse=True)[:10]
     }
+
+# -----------------------
+# INPUT MODEL
+# -----------------------
+class AdInput(BaseModel):
+    headline: Optional[str] = None
+    body: Optional[str] = None
+    cta: Optional[str] = None
+
+# -----------------------
+# GPT FUNCTION (AQUI ESTÁ O QUE VOCÊ PEDIU)
+# -----------------------
+def call_gpt_api(payload):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert in marketing, ads analysis and conversion copywriting. "
+                        "Analyze ads and return structured insights."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"""
+Analyze this ad:
+
+Headline: {payload.get('headline')}
+Body: {payload.get('body')}
+CTA: {payload.get('cta')}
+
+Return:
+- emotion (urgency, trust, curiosity, etc)
+- conversion_score (0-10)
+- strengths
+- weaknesses
+- improvement suggestions
+"""
+                }
+            ],
+            temperature=0.7
+        )
+
+        return {
+            "result": response.choices[0].message.content
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
+# -----------------------
+# GPT ANALYZE ENDPOINT
+# -----------------------
+@app.post("/ai/analyze-ad")
+def analyze_ad(data: AdInput):
+
+    payload = {
+        "headline": data.headline or "",
+        "body": data.body or "",
+        "cta": data.cta or ""
+    }
+
+    return call_gpt_api(payload)
+
+# -----------------------
+# OPTIONAL: GENERATE AD
+# -----------------------
+@app.post("/ai/generate-ad")
+def generate_ad(data: dict):
+    return call_gpt_api(data)

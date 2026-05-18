@@ -1,50 +1,53 @@
 import json
-
 from database.db import SessionLocal
 from database.models import Ad
 
-
-INPUT_FILE = "data/enriched_ads.json"
-
-db = SessionLocal()
+FILE_PATH = "data/normalized/ads_normalized.json"
 
 
-with open(INPUT_FILE, "r", encoding="utf-8") as f:
-    ads = json.load(f)
+def load_ads():
+    with open(FILE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-inserted = 0
+def save_to_db():
+    db = SessionLocal()
+    ads = load_ads()
 
-for item in ads:
+    inserted = 0
+    skipped = 0
 
-    # evita duplicados
-    exists = db.query(Ad).filter(
-        Ad.ad_id == item.get("ad_id")
-    ).first()
+    for ad in ads:
+        existing = db.query(Ad).filter(Ad.ad_id == ad["ad_id"]).first()
 
-    if exists:
-        continue
+        if existing:
+            skipped += 1
+            continue
 
-    ad = Ad(
+        new_ad = Ad(
+            ad_id=ad.get("ad_id"),
+            page_name=ad.get("page_name"),
+            headline=ad.get("headline"),
+            body=ad.get("body"),
+            cta=ad.get("cta"),
+            cta_link=ad.get("cta_link"),
+            media_type=ad.get("media_type"),
+            image_url=ad.get("image_url"),
+            video_preview=ad.get("video_preview"),
+            country=ad.get("country", None),
+            ocr_text=ad.get("ocr_text", "")
+        )
 
-        ad_id=item.get("ad_id"),
-        page_name=item.get("page_name"),
-        headline=item.get("headline"),
-        body=item.get("body"),
-        cta=item.get("cta"),
-        cta_link=item.get("cta_link"),
-        media_type=item.get("media_type"),
-        image_url=item.get("image_url"),
-        video_preview=item.get("video_preview"),
-        ocr_text=item.get("ocr_text"),
-        analysis=item.get("analysis")
-    )
+        db.add(new_ad)
+        inserted += 1
 
-    db.add(ad)
-    inserted += 1
+    db.commit()
+    db.close()
+
+    print(f"[🔥 IMPORTAÇÃO FINALIZADA]")
+    print(f"[+] Inseridos: {inserted}")
+    print(f"[=] Ignorados (duplicados): {skipped}")
 
 
-db.commit()
-db.close()
-
-print(f"[🔥 IMPORTAÇÃO FINALIZADA 🔥] {inserted} novos ads inseridos")
+if __name__ == "__main__":
+    save_to_db()

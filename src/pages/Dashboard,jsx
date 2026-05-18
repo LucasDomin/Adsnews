@@ -1,0 +1,37 @@
+import { useEffect, useState } from "react";
+import { getAds, getInsights } from "../api/api";
+import AdCard from "../components/AdCard";
+import InsightsPanel from "../components/InsightsPanel";
+
+export default function Dashboard() {
+  const [ads, setAds] = useState([]);
+  const [insights, setInsights] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    const adsRes = await getAds();
+    const insightsRes = await getInsights();
+
+    setAds(adsRes.data);
+    setInsights(insightsRes.data);
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>📊 Ad Intelligence Dashboard</h1>
+
+      {insights && <InsightsPanel data={insights} />}
+
+      <h2>🔥 Ads</h2>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        {ads.map((ad) => (
+          <AdCard key={ad.ad_id} ad={ad} />
+        ))}
+      </div>
+    </div>
+  );
+}

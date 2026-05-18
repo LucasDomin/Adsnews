@@ -45,3 +45,6 @@ async def main():
 
 
 asyncio.run(main())
+def run_scraper():
+    import asyncio
+    asyncio.run(main())
