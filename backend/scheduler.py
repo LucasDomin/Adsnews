@@ -1,35 +1,21 @@
-import schedule
-import time
+﻿import schedule, time, logging
 from datetime import datetime
 
-from collectors.scraper import run_scraper
-from parsers.parser_pipeline import run_parser
-from enrichers.enrich_ads import run_enrichment
-from storage import save_json
-
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [SCHEDULER] %(message)s")
+log = logging.getLogger(__name__)
 
 def run_pipeline():
-    print("\n==========================")
-    print("🚀 PIPELINE:", datetime.now())
-    print("==========================\n")
-
+    log.info("Iniciando pipeline...")
     try:
-        run_scraper()
-        run_parser()
-        run_enrichment()
-        run_import()
-
-        print("\n🔥 PIPELINE FINALIZADO COM SUCESSO\n")
-
+        from app.pipeline.runner import run_pipeline as _run
+        _run()
+        log.info("Pipeline concluido.")
     except Exception as e:
-        print("❌ ERRO NA PIPELINE:", e)
+        log.error(f"Erro: {e}")
 
-
-schedule.every(2).hours.do(run_pipeline)
-
-run_pipeline()
-
-print("⏱ Scheduler ativo (2h)")
+schedule.every().day.at("12:00").do(run_pipeline)
+schedule.every().day.at("23:00").do(run_pipeline)
+log.info("Scheduler ativo. Rodara as 12:00 e 23:00.")
 
 while True:
     schedule.run_pending()

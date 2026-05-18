@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
+import AdCard from "../components/AdCard";
+import { getAds, getSummary } from "../api/api";
 
 export default function Dashboard() {
   const [ads, setAds] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/ads")
-      .then(res => res.json())
-      .then(data => {
-        setAds(data);
-        setLoading(false);
+    Promise.all([getAds(), getSummary()])
+      .then(([adsRes, summaryRes]) => {
+        setAds(adsRes.data);
+        setSummary(summaryRes.data);
       })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = ads.filter(ad =>
@@ -25,55 +25,99 @@ export default function Dashboard() {
   );
 
   if (loading) {
-    return (
-      <div style={styles.loading}>
-        🔄 Carregando Ads...
-      </div>
-    );
+    return <div style={styles.loading}>🔄 Carregando Ads...</div>;
   }
+
+  // Top media type
+  const topMedia = summary?.media_distribution
+    ? Object.entries(summary.media_distribution).sort((a, b) => b[1] - a[1])[0]
+    : null;
 
   return (
     <div style={styles.container}>
-      
+
       {/* HEADER */}
       <div style={styles.header}>
         <h1 style={styles.title}>📊 AdSpy BigSpy Dashboard</h1>
-
         <input
           style={styles.search}
           placeholder="Buscar anúncios, páginas, headlines..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-
-        <div style={styles.stats}>
-          Total: {filtered.length} anúncios
-        </div>
       </div>
 
-      {/* GRID */}
+      {/* MÉTRICAS */}
+      {summary && (
+        <div style={styles.metricsRow}>
+          <div style={styles.metricCard}>
+            <div style={styles.metricValue}>{summary.total_ads}</div>
+            <div style={styles.metricLabel}>Total de Anúncios</div>
+          </div>
+
+          <div style={styles.metricCard}>
+            <div style={styles.metricValue}>
+              {Object.keys(summary.media_distribution || {}).length}
+            </div>
+            <div style={styles.metricLabel}>Tipos de Mídia</div>
+          </div>
+
+          {topMedia && (
+            <div style={styles.metricCard}>
+              <div style={styles.metricValue}>{topMedia[0]}</div>
+              <div style={styles.metricLabel}>Mídia Mais Comum ({topMedia[1]})</div>
+            </div>
+          )}
+
+          <div style={styles.metricCard}>
+            <div style={styles.metricValue}>
+              {(summary.top_pages || []).length}
+            </div>
+            <div style={styles.metricLabel}>Top Pages Rastreadas</div>
+          </div>
+        </div>
+      )}
+
+      {/* TOP PAGES */}
+      {summary?.top_pages?.length > 0 && (
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>🏆 Top Páginas</h2>
+          <div style={styles.topPagesRow}>
+            {summary.top_pages.map(([page, count], i) => (
+              <div key={i} style={styles.pageChip}>
+                <span style={styles.pageRank}>#{i + 1}</span>
+                <span style={styles.pageName}>{page || "—"}</span>
+                <span style={styles.pageCount}>{count} ads</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* DISTRIBUIÇÃO DE MÍDIA */}
+      {summary?.media_distribution && (
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>📦 Distribuição por Mídia</h2>
+          <div style={styles.topPagesRow}>
+            {Object.entries(summary.media_distribution).map(([type, count], i) => (
+              <div key={i} style={{ ...styles.pageChip, background: "#1a2a1a" }}>
+                <span style={styles.pageName}>{type || "desconhecido"}</span>
+                <span style={styles.pageCount}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* STATS BAR */}
+      <div style={styles.statsBar}>
+        Exibindo {filtered.length} de {ads.length} anúncios
+      </div>
+
+      {/* GRID DE ADS */}
       <div style={styles.grid}>
         {filtered.map((ad, i) => (
-          <div key={i} style={styles.card}>
-            
-            <div style={styles.page}>
-              🏢 {ad.page_name}
-            </div>
-
-            <h3 style={styles.headline}>
-              {ad.headline}
-            </h3>
-
-            <p style={styles.body}>
-              {ad.body}
-            </p>
-
-            <div style={styles.footer}>
-              <span>🎯 {ad.cta}</span>
-              <span>📦 {ad.media_type}</span>
-            </div>
-
-          </div>
+          <AdCard key={ad.ad_id || i} ad={ad} />
         ))}
       </div>
 
@@ -85,75 +129,107 @@ const styles = {
   container: {
     background: "#0f0f0f",
     minHeight: "100vh",
-    padding: 20,
+    padding: 24,
     color: "#fff",
-    fontFamily: "Arial"
+    fontFamily: "'Segoe UI', sans-serif",
   },
-
   header: {
-    marginBottom: 20
+    marginBottom: 24,
   },
-
   title: {
-    marginBottom: 10
+    fontSize: 28,
+    fontWeight: 700,
+    marginBottom: 12,
+    letterSpacing: "-0.5px",
   },
-
   search: {
     width: "100%",
-    padding: 12,
+    padding: "12px 16px",
     borderRadius: 8,
-    border: "none",
+    border: "1px solid #333",
+    background: "#1c1c1c",
+    color: "#fff",
+    fontSize: 14,
     outline: "none",
-    marginBottom: 10
+    boxSizing: "border-box",
   },
-
-  stats: {
-    opacity: 0.7,
-    fontSize: 14
+  metricsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    gap: 12,
+    marginBottom: 24,
   },
-
+  metricCard: {
+    background: "#1c1c1c",
+    border: "1px solid #2a2a2a",
+    borderRadius: 10,
+    padding: "16px 20px",
+    textAlign: "center",
+  },
+  metricValue: {
+    fontSize: 28,
+    fontWeight: 700,
+    color: "#4ade80",
+    lineHeight: 1.2,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 4,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    marginBottom: 10,
+    color: "#ccc",
+  },
+  topPagesRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  pageChip: {
+    background: "#1c1c1c",
+    border: "1px solid #2a2a2a",
+    borderRadius: 20,
+    padding: "6px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+  },
+  pageRank: {
+    color: "#4ade80",
+    fontWeight: 700,
+    fontSize: 11,
+  },
+  pageName: {
+    color: "#ddd",
+  },
+  pageCount: {
+    color: "#666",
+    fontSize: 11,
+  },
+  statsBar: {
+    fontSize: 13,
+    color: "#666",
+    marginBottom: 16,
+  },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-    gap: 15
+    gap: 16,
   },
-
-  card: {
-    background: "#1c1c1c",
-    padding: 15,
-    borderRadius: 12,
-    border: "1px solid #2a2a2a"
-  },
-
-  page: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginBottom: 5
-  },
-
-  headline: {
-    marginBottom: 8
-  },
-
-  body: {
-    fontSize: 14,
-    opacity: 0.85
-  },
-
-  footer: {
-    marginTop: 10,
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 12,
-    opacity: 0.6
-  },
-
   loading: {
     background: "#0f0f0f",
     color: "#fff",
     height: "100vh",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center"
-  }
+    justifyContent: "center",
+    fontSize: 18,
+  },
 };
