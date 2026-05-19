@@ -22,16 +22,31 @@ async function fetchSummary() {
   return res.json();
 }
 
+const LOCAL = "http://localhost:9000";
+
 async function triggerRefresh() {
-  const res = await fetch(`${API}/dashboard/refresh`, { method: 'POST' });
-  if (!res.ok) throw new Error('Erro ao iniciar refresh');
-  return res.json();
+  try {
+    // Tenta o trigger local primeiro (roda o scraper na sua máquina)
+    const res = await fetch(`${LOCAL}/refresh`, { method: 'POST' });
+    if (res.ok) return res.json();
+  } catch {
+    // Se local não estiver rodando, tenta o Render
+    const res = await fetch(`${API}/dashboard/refresh`, { method: 'POST' });
+    if (!res.ok) throw new Error('Nenhum trigger disponível');
+    return res.json();
+  }
 }
 
 async function fetchRefreshStatus() {
-  const res = await fetch(`${API}/dashboard/refresh/status`);
-  if (!res.ok) return { running: false };
-  return res.json();
+  try {
+    const res = await fetch(`${LOCAL}/status`);
+    if (res.ok) return res.json();
+  } catch {}
+  try {
+    const res = await fetch(`${API}/dashboard/refresh/status`);
+    if (res.ok) return res.json();
+  } catch {}
+  return { running: false };
 }
 
 async function fetchAnalyze(ad: any) {
